@@ -102,14 +102,6 @@ When run from source, the working folders (`output/`, `processed/`, `failed/`, `
 
 `src/main.py` is the original console version: it converts whatever lands in `src/inbox/`.
 
-## Building
-
-```powershell
-python src/build.py
-```
-
-Close HwTex first. This makes `HwTex.exe` in `%LOCALAPPDATA%\Programs\HwTex`, adds a Start Menu shortcut and writes `HwTex.zip` to your Downloads folder, ready to attach to a GitHub release.
-
 ## Project layout
 
 ```
