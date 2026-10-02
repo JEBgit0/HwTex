@@ -12,6 +12,15 @@ I wanted to try out LaTeX, but typing up my handwritten lecture notes by hand tu
 
 If there is real interest in HwTex, I will keep updating it. Feel free to open an [issue](../../issues) with bugs, ideas or questions, or star the repository if you find it useful.
 
+## Why HwTex?
+
+Tools like Mathpix already turn handwriting into LaTeX, so why another one?
+
+- **No extra subscription.** I first looked at connecting to the Mathpix API, but the pricing was far more than I wanted to pay for a personal project. Many people already have a Claude Pro or Max plan, or an Anthropic API key, so HwTex uses what you already pay for instead of adding another bill.
+- **Built around your own LaTeX.** HwTex sends Claude the preamble of the document the notes go into, so it only uses the packages and macros you already have. The result drops straight into your `.tex` at a `%%BODY%%` marker, so you can switch between typing and writing by hand in the same document.
+- **Fits a tablet workflow.** Point it at the folder your iPad or phone syncs to, and new notes are converted as they arrive.
+- **Open and adjustable.** The instructions sent to Claude live in `src/prompts/`, and you can add your own rules and template in `custom/`, so you can change how it transcribes instead of being stuck with a fixed service.
+
 ## Features
 
 - **Drop files or folders**, or pick them with a file dialog. Supports `.pdf`, `.png`, `.jpg` and `.jpeg`, including multi-page PDFs from a tablet.
