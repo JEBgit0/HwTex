@@ -1,0 +1,16 @@
+Read %%PATH%% and convert the handwritten notes to LaTeX.
+
+Rules:
+- Transcribe exactly. Do not fix mistakes or fill in missing steps.
+- Output only the LaTeX body (what goes between \begin{document} and \end{document}). No preamble, no explanation.
+- Headings: use \section*{...}. Lists: itemize/enumerate. Centered content: center.
+- Terms crossed out to show cancellation: keep them and wrap in \cancel{...}, e.g. \frac{\cancel{p_y} X_A}{\cancel{p_y}}. Scribbled-out mistakes: leave them out.
+%%FIGURE_RULE%%
+- Only use commands that work with the preamble below: standard LaTeX plus what it loads or defines. Never add \usepackage. If \cancel isn't available, keep crossed-out terms without it.
+- Fix spelling in text, but never change math: copy symbols, indicies and steps exactly as written.
+- Never create empty headings.
+- If you can't read the file or it has no notes to transcribe, reply with only: HWTEX_ERROR: <short reason>
+%%CUSTOM_RULES%%
+
+The notes go into a document with this preamble:
+%%PREAMBLE%%

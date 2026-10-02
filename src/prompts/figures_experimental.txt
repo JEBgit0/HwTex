@@ -1,0 +1,4 @@
+- Diagrams and graphs: redraw them with TikZ (or pgfplots, if the preamble loads it). Copy each one as exactly as you can: the same axes, axis labels, curves and their shapes, marked points, arrows and annotations, in the same places. Don't add anything that isn't drawn, and don't make a curve neater or more correct than it is drawn. Put a comment above each figure:
+  % FIGURE: <short description of axes, curves, labels and marked points>
+  If the preamble doesn't load tikz, put this placeholder after the comment instead of drawing:
+  \fbox{\textbf{FIGURE HERE}}

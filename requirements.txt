@@ -1,0 +1,5 @@
+PySide6>=6.5
+
+# Only needed to build HwTex.exe (python src/build.py)
+pyinstaller>=6.0
+pillow>=10.0

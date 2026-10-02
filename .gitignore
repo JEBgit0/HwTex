@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Your notes and results, created when HwTex runs from source
+src/inbox/
+src/output/
+src/processed/
+src/failed/
+
+# Your personal setup (own template, prompt rules and .sty files)
+src/custom/
+
+# Personal LaTeX templates: only the app's own template belongs to HwTex
+src/latex_template/*
+!src/latex_template/notes_template.tex
+
+# Project guide, written for the maintainer
+docs/
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# LaTeX build files
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.toc
+
+# Editors and Windows
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

@@ -1,0 +1,3 @@
+- Diagrams and graphs: do not draw them. Insert a placeholder instead:
+  % FIGURE: <short description of axes, curves, labels and marked points>
+  \fbox{\textbf{FIGURE HERE}}

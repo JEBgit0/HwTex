@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <clipPath id="tile"><rect x="8" y="8" width="240" height="240" rx="56"/></clipPath>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="#2563eb"/>
+  <g clip-path="url(#tile)">
+    <g transform="translate(-18 -10) rotate(-45 128 128)" stroke="#1e3a8a" stroke-width="6" stroke-linejoin="round">
+      <!-- palm and wrist, running off the bottom-right edge -->
+      <path d="M 130 150 C 130 128, 160 126, 190 132 C 214 137, 222 160, 214 184 L 206 320 L 150 320 L 142 196 C 128 184, 128 168, 130 150 Z" fill="#ffffff"/>
+      <!-- pencil, tip pointing left -->
+      <g stroke="none">
+        <rect x="62" y="116" width="150" height="24" rx="3" fill="#fbbf24"/>
+        <rect x="206" y="116" width="22" height="24" rx="4" fill="#f472b6"/>
+        <polygon points="30,128 62,114 62,142" fill="#fde68a"/>
+        <polygon points="30,128 42,123 42,133" fill="#1e293b"/>
+      </g>
+      <!-- thumb under the pencil, index finger on top -->
+      <rect x="92" y="134" width="84" height="26" rx="13" fill="#ffffff"/>
+      <rect x="80" y="100" width="116" height="28" rx="14" fill="#ffffff"/>
+    </g>
+  </g>
+</svg>
