@@ -6,6 +6,12 @@ Drop a PDF or image of your notes on the window. [Claude Code](https://code.clau
 
 Windows only.
 
+## Motivation
+
+I wanted to try out LaTeX, but typing up my handwritten lecture notes by hand turned out to be far too time consuming. My professor suggested automating it as a small project. It grew a bit beyond that.
+
+If there is real interest in HwTex, I will keep updating it. Feel free to open an [issue](../../issues) with bugs, ideas or questions, or star the repository if you find it useful.
+
 ## Features
 
 - **Drop files or folders**, or pick them with a file dialog. Supports `.pdf`, `.png`, `.jpg` and `.jpeg`, including multi-page PDFs from a tablet.
