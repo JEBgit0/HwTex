@@ -1,0 +1,26 @@
+[project]
+name = "hwtex-local-engine"
+version = "0.1.0"
+description = "Runs the HwTex handwriting model on this PC's NVIDIA GPU instead of Claude."
+requires-python = ">=3.12"
+dependencies = [
+    "accelerate==1.15.0",
+    "huggingface-hub==2.3.0",
+    "peft==0.21.2",
+    "pillow",
+    "torch==2.11.0",
+    "torchvision==0.26.0",
+    "transformers==5.20.2",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu128" }]
+torchvision = [{ index = "pytorch-cu128" }]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true

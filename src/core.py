@@ -1,6 +1,7 @@
 from pathlib import Path
 from datetime import datetime
 import ctypes
+import json
 import os
 import re
 import subprocess
@@ -77,16 +78,24 @@ def find_latexmk():
         PROGRAM_FILES / "MiKTeX" / "miktex" / "bin" / "x64" / "latexmk.exe",
     ])
 
+def find_uv():
+    return find_tool("uv", [
+        Path.home() / ".local" / "bin" / "uv.exe",  # astral installer
+        LOCAL_APPDATA / "Microsoft" / "WinGet" / "Links" / "uv.exe",
+    ])
+
 CLAUDE = find_claude()
 LATEXMK = find_latexmk()
+UV = find_uv()
 
 def refresh_tools():
-    # Picks up a claude or TeX install made while the app was open.
-    global CLAUDE, LATEXMK
-    CLAUDE, LATEXMK = find_claude(), find_latexmk()
+    # Picks up a claude, uv or TeX install made while the app was open.
+    global CLAUDE, LATEXMK, UV
+    CLAUDE, LATEXMK, UV = find_claude(), find_latexmk(), find_uv()
 
-def missing_tools():
-    return [name for name, path in [("claude", CLAUDE), ("latexmk", LATEXMK)] if path is None]
+def missing_tools(engine="claude"):
+    needed = [("claude", CLAUDE) if engine == "claude" else ("uv", UV), ("latexmk", LATEXMK)]
+    return [name for name, path in needed if path is None]
 
 def check_latexmk():
     """Returns (ok, detail). Found isn't enough: MiKTeX's latexmk also needs Perl."""
@@ -114,6 +123,21 @@ def check_claude_login():
     if result.returncode == 0 and "OK" in result.stdout:
         return True, "logged in"
     return False, (result.stderr or result.stdout).strip() or f"claude exited with code {result.returncode}"
+
+def check_gpu():
+    """Returns (ok, detail): the local model needs an NVIDIA GPU."""
+    system32 = Path(os.environ.get("SystemRoot", "C:/Windows")) / "System32"
+    nvidia_smi = find_tool("nvidia-smi", [system32 / "nvidia-smi.exe"])
+    if nvidia_smi is None:
+        return False, "no NVIDIA GPU (or driver) found"
+    try:
+        result = subprocess.run([nvidia_smi, "--query-gpu=name,memory.total", "--format=csv,noheader"],
+                                capture_output=True, text=True, timeout=30, **HIDDEN)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return False, str(e)
+    if result.returncode != 0 or not result.stdout.strip():
+        return False, (result.stderr or "nvidia-smi failed").strip()
+    return True, result.stdout.strip().splitlines()[0]
 
 def ensure_folders():
     for folder in (INBOX, OUTPUT, PROCESSED, FAILED):
@@ -229,11 +253,99 @@ def archive(file, target, keep_original):
     else:
         file.rename(target)
 
-def convert(file, timestamp=None, keep_original=False, target=None, more_coming=False, draw_figures=False):
-    """Ask Claude to turn file into LaTeX and return the .tex path.
+ENGINES = {"claude": "Claude", "local": "Local model (experimental)"}
+LOCAL_ENGINE = RESOURCE_DIR / "local_engine"
+# The local model's Python packages (torch etc., several GB) live outside the app folder, so they
+# survive updating HwTex. The model itself goes in the usual Hugging Face cache.
+LOCAL_ENGINE_HOME = LOCAL_APPDATA / "HwTex"
+LOCAL_ENGINE_LOG = LOCAL_ENGINE_HOME / "local-engine.log"
+
+class LocalEngine:
+    """The fine-tuned model in local_engine/, as a child process that HwTex starts on first use and
+    keeps running, so the model loads once. local_engine/engine.py describes the protocol."""
+
+    def __init__(self):
+        self.process = None
+
+    def start(self, on_status):
+        if self.process and self.process.poll() is None:
+            return
+        if UV is None:
+            raise ConversionError("uv not found, the local model needs it. See Setup.")
+        LOCAL_ENGINE_HOME.mkdir(parents=True, exist_ok=True)
+        on_status("starting the local model (the first time installs several GB)...")
+        with open(LOCAL_ENGINE_LOG, "w", encoding="utf-8") as log:
+            self.process = subprocess.Popen(
+                [UV, "run", "--frozen", "--project", str(LOCAL_ENGINE), "python", str(LOCAL_ENGINE / "engine.py")],
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=log, text=True, encoding="utf-8",
+                env={**os.environ, "UV_PROJECT_ENVIRONMENT": str(LOCAL_ENGINE_HOME / "local-engine")},
+                creationflags=subprocess.CREATE_NO_WINDOW if NO_CONSOLE else 0,
+            )
+        message = self.receive(on_status)
+        if not message.get("ready"):
+            self.stop()
+            raise ConversionError(message.get("error", "the local model did not start"))
+
+    def receive(self, on_status):
+        """The next message that isn't a status update."""
+        for line in self.process.stdout:
+            try:
+                message = json.loads(line)
+            except ValueError:
+                continue
+            if "status" in message:
+                on_status(message["status"])
+            else:
+                return message
+        self.stop()
+        raise ConversionError(f"The local model stopped, see {LOCAL_ENGINE_LOG}")
+
+    def transcribe(self, pages, on_status):
+        self.start(on_status)
+        self.process.stdin.write(json.dumps({"pages": [str(page) for page in pages]}) + "\n")
+        self.process.stdin.flush()
+        message = self.receive(on_status)
+        if "error" in message:
+            raise ConversionError(message["error"])
+        return message["body"]
+
+    def stop(self):
+        if self.process and self.process.poll() is None:
+            self.process.stdin.close()  # the engine exits when its input ends
+            try:
+                self.process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+        self.process = None
+
+local_engine = LocalEngine()
+
+def ask_claude(file, page_dir, prompt):
+    result = subprocess.run(
+        # Claude only reads inside its working folder unless given access to other folders.
+        [CLAUDE or "claude", "--add-dir", str(file.parent), "--add-dir", page_dir, "-p", prompt],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        cwd=DATA_DIR,
+        **HIDDEN,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        raise ConversionError(result.stderr)
+    latex = clean_output(result.stdout)
+    # prompt.txt tells Claude to reply with this instead of LaTeX when it can't do the job.
+    if ERROR_MARKER in latex:
+        raise ConversionError(latex.split(ERROR_MARKER, 1)[1].strip(" :\n"))
+    return latex
+
+def convert(file, timestamp=None, keep_original=False, target=None, more_coming=False, draw_figures=False,
+            engine="claude", on_status=lambda status: None):
+    """Turn file into LaTeX with Claude (or the local model) and return the .tex path.
 
     draw_figures (experimental): Claude redraws diagrams and graphs with TikZ instead of
-    leaving a placeholder.
+    leaving a placeholder. The local model always leaves a placeholder, and doesn't see
+    the preamble or custom/prompt.txt.
+    on_status: called with progress text while the local model works.
 
     Without target, writes a new .tex made from the template to output/.
     With target (an existing .tex), puts the notes at the first %%BODY%% in it instead.
@@ -257,27 +369,14 @@ def convert(file, timestamp=None, keep_original=False, target=None, more_coming=
     with tempfile.TemporaryDirectory(prefix="hwtex-") as page_dir:
         try:
             pages = render_pages(file, Path(page_dir)) if file.suffix.lower() == ".pdf" else []
+            if engine == "local":
+                latex = local_engine.transcribe(pages or [file], on_status)
+            else:
+                prompt = make_prompt(describe_input(file, pages), read_tex(root) if root else tex, draw_figures)
+                latex = ask_claude(file, page_dir, prompt)
         except ConversionError:
             archive(file, FAILED / new_name, keep_original)
             raise
-        prompt = make_prompt(describe_input(file, pages), read_tex(root) if root else tex, draw_figures)
-        result = subprocess.run(
-            # Claude only reads inside its working folder unless given access to other folders.
-            [CLAUDE or "claude", "--add-dir", str(file.parent), "--add-dir", page_dir, "-p", prompt],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            cwd=DATA_DIR,
-            **HIDDEN,
-        )
-    if result.returncode != 0 or not result.stdout.strip():
-        archive(file, FAILED / new_name, keep_original)
-        raise ConversionError(result.stderr)
-    latex = clean_output(result.stdout)
-    # prompt.txt tells Claude to reply with this instead of LaTeX when it can't do the job.
-    if ERROR_MARKER in latex:
-        archive(file, FAILED / new_name, keep_original)
-        raise ConversionError(latex.split(ERROR_MARKER, 1)[1].strip(" :\n"))
     if target:
         tex_path = target
         tex = read_tex(target)  # again, it may have been edited while Claude worked

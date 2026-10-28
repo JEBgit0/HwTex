@@ -1,0 +1,9 @@
+Convert the handwritten notes on this page to LaTeX.
+
+Rules:
+- Transcribe exactly. Do not fix mistakes or fill in missing steps.
+- Output only the LaTeX body (what goes between \begin{document} and \end{document}). No preamble, no explanation, no code fences.
+- Headings: use \section*{...}. Lists: itemize/enumerate. Centered content: center.
+- Terms crossed out to show cancellation: wrap in \cancel{...}. Scribbled-out mistakes: leave them out.
+- Figures: a comment "% FIGURE: <short description>" followed by \fbox{\textbf{FIGURE HERE}}.
+- Use only standard LaTeX with amsmath, amssymb and cancel. Never add \usepackage.

@@ -8,13 +8,13 @@ from PySide6.QtGui import QDesktopServices, QIcon
 from PySide6.QtPdf import QPdfDocument
 from PySide6.QtPdfWidgets import QPdfView
 from PySide6.QtWidgets import (
-    QApplication, QCheckBox, QDialog, QFileDialog, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
+    QApplication, QCheckBox, QComboBox, QDialog, QFileDialog, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
     QMainWindow, QMessageBox, QPushButton, QSplitter, QVBoxLayout, QWidget,
 )
 
 import core
 from core import (
-    DATA_DIR, FAILED, INBOX, MARKER, OUTPUT, PROCESSED, RESOURCE_DIR, SUPPORTED,
+    DATA_DIR, ENGINES, FAILED, INBOX, MARKER, OUTPUT, PROCESSED, RESOURCE_DIR, SUPPORTED,
     ConversionError, MissingMarker, convert, compile_pdf, ensure_folders, find_root, is_ready, natural_key,
 )
 
@@ -24,6 +24,7 @@ WATCH_INTERVAL_MS = 10_000  # same as the 10 s sleep in main.py
 CLAUDE_INSTALL_URL = "https://code.claude.com/docs/en/setup"
 TEX_INSTALL_URL = "https://tug.org/texlive/windows.html"
 PERL_URL = "https://strawberryperl.com"
+UV_INSTALL_URL = "https://docs.astral.sh/uv/getting-started/installation/"
 ICON = RESOURCE_DIR / "assets" / "icon.ico"
 NEW_DOCUMENT_TEXT = "Each file becomes a new PDF"
 
@@ -33,8 +34,8 @@ class Worker(QObject):
     # job id, result path (pdf, log or ""), error ("" on success), notes were added to your own .tex
     done = Signal(int, str, str, bool)
 
-    @Slot(int, str, bool, str, bool, bool)
-    def run(self, job_id, path, keep_original, target, more_coming, draw_figures):
+    @Slot(int, str, bool, str, bool, bool, str)
+    def run(self, job_id, path, keep_original, target, more_coming, draw_figures, engine):
         # target: .tex to put the notes in at %%BODY%%, or "" for a new document
         file = Path(path)
         if not file.exists():
@@ -44,12 +45,14 @@ class Worker(QObject):
         try:
             tex_path = convert(file, keep_original=keep_original,
                                target=Path(target) if target else None, more_coming=more_coming,
-                               draw_figures=draw_figures)
+                               draw_figures=draw_figures, engine=engine,
+                               on_status=lambda status: self.status.emit(job_id, status))
         except MissingMarker as e:
             self.done.emit(job_id, "", str(e), False)
             return
         except ConversionError as e:
-            self.done.emit(job_id, "", f"Claude failed: {e}".strip(), False)
+            name = "Claude" if engine == "claude" else "The local model"
+            self.done.emit(job_id, "", f"{name} failed: {e}".strip(), False)
             return
         except Exception as e:
             self.done.emit(job_id, "", str(e), False)
@@ -138,6 +141,7 @@ class SetupDialog(QDialog):
         self.login = None  # (ok, detail) once tested in this session
         self.testing = False
         self.latex = (False, "")
+        self.gpu = (False, "")
 
         self.label = QLabel()
         self.label.setTextFormat(Qt.TextFormat.RichText)
@@ -162,19 +166,43 @@ class SetupDialog(QDialog):
         layout.addWidget(self.label)
         layout.addLayout(buttons)
 
+    def engine(self):
+        return self.settings.value("engine", "claude")
+
     def needs_attention(self):
+        if self.engine() == "local":
+            return bool(core.missing_tools("local")) or not self.latex[0] or not self.gpu[0]
         return bool(core.missing_tools()) or not self.latex[0] or not self.settings.value("claude_login_ok", False, bool)
 
     def refresh(self):
         core.refresh_tools()
         self.latex = core.check_latexmk()
+        if self.engine() == "local":
+            self.gpu = core.check_gpu()
         self.render()
 
     def render(self):
         ok, bad = "<span style='color:#16a34a'>&#10003;</span>", "<span style='color:#dc2626'>&#10007;</span>"
         rows = []
 
-        if core.CLAUDE:
+        local = self.engine() == "local"
+        if local:
+            rows.append("Engine: <b>local model</b> (experimental), runs on your own NVIDIA GPU.")
+            if self.gpu[0]:
+                rows.append(f"{ok} <b>NVIDIA GPU</b> found<br><small>{self.gpu[1]}</small>")
+            else:
+                rows.append(f"{bad} <b>NVIDIA GPU</b>: {self.gpu[1]}. The local model needs one; use Claude "
+                            "on this PC instead.")
+            if core.UV:
+                rows.append(f"{ok} <b>uv</b> found<br><small>{core.UV}</small><br><small>The first conversion "
+                            "downloads the model and its Python packages (about 7 GB) and takes a while.</small>")
+            else:
+                rows.append(
+                    f"{bad} <b>uv</b> not found. It installs what the local model needs. "
+                    f"<a href='{UV_INSTALL_URL}'>Install it</a>, for example by running this in PowerShell:"
+                    "<br><code>irm https://astral.sh/uv/install.ps1 | iex</code>"
+                )
+        elif core.CLAUDE:
             rows.append(f"{ok} <b>Claude Code</b> found<br><small>{core.CLAUDE}</small>")
         else:
             rows.append(
@@ -182,24 +210,8 @@ class SetupDialog(QDialog):
                 "for example by running this in PowerShell:<br><code>irm https://claude.ai/install.ps1 | iex</code>"
             )
 
-        if not core.CLAUDE:
-            rows.append(f"{bad} <b>Claude login</b>: install Claude Code first.")
-        elif self.testing:
-            rows.append("&#8230; <b>Claude login</b>: testing, this takes a few seconds.")
-        elif self.login is None:
-            tested = self.settings.value("claude_login_ok", False, bool)
-            rows.append(
-                f"{ok if tested else bad} <b>Claude login</b>: "
-                + ("worked last time it was tested." if tested else
-                   "not tested yet. Click <i>Test Claude login</i> (sends Claude one tiny message).")
-            )
-        elif self.login[0]:
-            rows.append(f"{ok} <b>Claude login</b> works.")
-        else:
-            rows.append(
-                f"{bad} <b>Claude login</b> failed: {self.login[1]}<br>Open a terminal, run <code>claude</code> "
-                "and log in. Claude Code needs a Pro or Max plan, or an Anthropic API key."
-            )
+        if not local:
+            rows.append(self.login_row(ok, bad))
 
         if self.latex[0]:
             rows.append(f"{ok} <b>LaTeX</b> (latexmk) works<br><small>{self.latex[1]}</small>")
@@ -214,7 +226,23 @@ class SetupDialog(QDialog):
         rows.append("<small>Just installed something? Close and reopen HwTex if <i>Check again</i> "
                     "doesn't pick it up.</small>")
         self.label.setText("<br><br>".join(rows))
+        self.login_button.setVisible(not local)
         self.login_button.setEnabled(bool(core.CLAUDE) and not self.testing)
+
+    def login_row(self, ok, bad):
+        if not core.CLAUDE:
+            return f"{bad} <b>Claude login</b>: install Claude Code first."
+        if self.testing:
+            return "&#8230; <b>Claude login</b>: testing, this takes a few seconds."
+        if self.login is None:
+            tested = self.settings.value("claude_login_ok", False, bool)
+            return (f"{ok if tested else bad} <b>Claude login</b>: "
+                    + ("worked last time it was tested." if tested else
+                       "not tested yet. Click <i>Test Claude login</i> (sends Claude one tiny message)."))
+        if self.login[0]:
+            return f"{ok} <b>Claude login</b> works."
+        return (f"{bad} <b>Claude login</b> failed: {self.login[1]}<br>Open a terminal, run <code>claude</code> "
+                "and log in. Claude Code needs a Pro or Max plan, or an Anthropic API key.")
 
     def test_login(self):
         self.testing = True
@@ -229,7 +257,7 @@ class SetupDialog(QDialog):
 
 
 class MainWindow(QMainWindow):
-    submit = Signal(int, str, bool, str, bool, bool)
+    submit = Signal(int, str, bool, str, bool, bool, str)
     request_scan = Signal(str, list)
 
     def __init__(self):
@@ -271,6 +299,17 @@ class MainWindow(QMainWindow):
         )
         self.figures_box.setChecked(self.settings.value("draw_figures", False, bool))
         self.figures_box.toggled.connect(lambda on: self.settings.setValue("draw_figures", on))
+        self.engine_box = QComboBox()
+        for key, name in ENGINES.items():
+            self.engine_box.addItem(name, key)
+        self.engine_box.setToolTip(
+            "Claude: best results, uses your Claude plan.\n"
+            "Local model: free and offline, runs on your NVIDIA GPU. Less accurate than Claude, always\n"
+            "leaves figures as placeholders, and doesn't use your preamble or custom/prompt.txt."
+        )
+        self.engine_box.setCurrentIndex(max(0, self.engine_box.findData(self.settings.value("engine", "claude"))))
+        self.engine_box.currentIndexChanged.connect(self.engine_changed)
+        self.update_figures_box()
 
         self.job_list = QListWidget()
         self.job_list.currentItemChanged.connect(self.show_job)
@@ -290,6 +329,10 @@ class MainWindow(QMainWindow):
         left_layout.addLayout(buttons)
         left_layout.addWidget(self.watch_label)
         left_layout.addLayout(target_row)
+        engine_row = QHBoxLayout()
+        engine_row.addWidget(QLabel("Engine:"))
+        engine_row.addWidget(self.engine_box, 1)
+        left_layout.addLayout(engine_row)
         left_layout.addWidget(self.figures_box)
         left_layout.addWidget(self.job_list)
         left = QWidget()
@@ -332,6 +375,18 @@ class MainWindow(QMainWindow):
         if not only_if_needed or self.setup_dialog.needs_attention():
             self.setup_dialog.show()
 
+    def engine(self):
+        return self.engine_box.currentData()
+
+    def engine_changed(self):
+        self.settings.setValue("engine", self.engine())
+        self.update_figures_box()
+        self.show_setup(only_if_needed=True)
+
+    def update_figures_box(self):
+        # The local model always leaves a placeholder.
+        self.figures_box.setEnabled(self.engine() == "claude")
+
     def select_files(self):
         pattern = "Notes (" + " ".join(f"*{ext}" for ext in SUPPORTED) + ")"
         names, _ = QFileDialog.getOpenFileNames(self, "Select files", "", pattern)
@@ -367,8 +422,9 @@ class MainWindow(QMainWindow):
         self.job_list.addItem(item)
         self.jobs[job_id] = item
         self.set_status(job_id, "queued")
+        local = self.engine() == "local"
         self.submit.emit(job_id, str(file), keep_original, str(self.target or ""), more_coming,
-                         self.figures_box.isChecked())
+                         self.figures_box.isChecked() and not local, self.engine())
         return job_id
 
     def toggle_target(self):
@@ -516,6 +572,7 @@ class MainWindow(QMainWindow):
         for thread in (self.watcher_thread, self.worker_thread):
             thread.quit()
             thread.wait()
+        core.local_engine.stop()
         super().closeEvent(event)
 
 

@@ -96,6 +96,20 @@ Experimental: redrawing graphs
   default template does).
 
 
+Experimental: the local model (no Claude needed)
+------------------------------------------------
+  Set "Engine" to "Local model (experimental)" and a small model runs on your
+  own PC instead of Claude: free and offline, but less accurate, so check the
+  result. It needs an NVIDIA GPU and uv, which you install from PowerShell:
+
+       irm https://astral.sh/uv/install.ps1 | iex
+
+  The first conversion downloads about 7 GB and takes a while. After that,
+  roughly 10 seconds per page. Figures always become a placeholder, and it
+  ignores custom\prompt.txt and your preamble (it uses amsmath, amssymb and
+  cancel, which the default template loads).
+
+
 Keeping Documents\HwTex small
 -----------------------------
   HwTex keeps everything it makes, so the folder grows over time:

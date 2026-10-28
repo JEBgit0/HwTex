@@ -56,6 +56,9 @@ PyInstaller.__main__.run([
     "--add-data", bundle("prompts", "prompts"),
     "--add-data", bundle("latex_template/notes_template.tex", "latex_template"),
     "--add-data", bundle("assets/icon.ico", "assets"),
+    # The local model's project: uv installs its packages on first use, outside the app folder.
+    *[arg for name in ("engine.py", "prompt.txt", "pyproject.toml", "uv.lock")
+      for arg in ("--add-data", bundle(f"local_engine/{name}", "local_engine"))],
 ])
 
 app_dir = INSTALL_DIR / "HwTex"

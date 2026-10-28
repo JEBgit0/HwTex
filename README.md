@@ -30,6 +30,7 @@ Tools like Mathpix already turn handwriting into LaTeX, so why another one?
 - **Exact transcription**: mistakes and missing steps are kept as written. Crossed-out terms keep their `\cancel`, scribbled-out mistakes are left out.
 - **Figures** become a described placeholder, or with the **experimental** option, Claude redraws them with TikZ.
 - **Your own template and macros** through an optional `custom/` folder.
+- **Experimental local model**: no Claude needed. A small fine-tuned model runs on your own NVIDIA GPU, free and offline.
 
 ## Requirements
 
@@ -78,6 +79,16 @@ Typed again after switching back to the PC.
 
 By default, diagrams and graphs become a placeholder with a description of what to draw. Tick **Experimental: redraw graphs and diagrams (TikZ)** to have Claude redraw them with TikZ instead, copying axes, labels, curves and marked points as closely as it can. Check these figures before relying on them: drawings are less reliable than text. Your document needs to load `tikz` (the default template does).
 
+### Experimental: the local model
+
+Set **Engine** to **Local model (experimental)** to convert without Claude. HwTex then runs [a small fine-tuned model](https://huggingface.co/despjeb/hwtex-qwen3-vl-2b) (Qwen3-VL-2B with a LoRA adapter, trained on handwritten maths and lecture notes) on your own PC.
+
+- **Needs** an NVIDIA GPU (tested on a 16 GB RTX 4070 Ti Super; the model itself takes about 5 GB), and [uv](https://docs.astral.sh/uv/getting-started/installation/) (`irm https://astral.sh/uv/install.ps1 | iex`). Setup checks both.
+- **The first conversion** downloads the model and its Python packages, about 7 GB, and takes a while. The packages go in `%LOCALAPPDATA%\HwTex`, the model in the Hugging Face cache. After that it works offline, at roughly 10 seconds per page.
+- **Less accurate than Claude**: on a test set of the author's own lecture notes it scores 0.78 against Claude's 0.92. Check the result.
+- Figures always become a placeholder, and the model doesn't see your preamble or `custom/prompt.txt`: it writes standard LaTeX with `amsmath`, `amssymb` and `cancel`, so your document needs to load those (the default template does).
+- The model is licensed CC BY-NC-SA 4.0 (non-commercial), because of its training data.
+
 ### Your own template
 
 Create `Documents\HwTex\custom` with any of:
@@ -120,6 +131,7 @@ src/
   main.py           the original console version
   build.py          packages the app with PyInstaller
   prompts/          the instructions sent to Claude
+  local_engine/     the local model: a uv project HwTex starts and talks to over stdin/stdout
   latex_template/   the default notes template
   assets/           the app icon
   share_readme.txt  the readme included in the release zip
@@ -131,6 +143,8 @@ src/
 2. HwTex runs `claude -p` with the instructions in `src/prompts/`, the page images and the preamble of the document the notes go into, so Claude only uses packages and macros that document has.
 3. The LaTeX is put into the template or your own `.tex` at `%%BODY%%`.
 4. `latexmk` compiles it, and the input file is moved or copied to `processed/`.
+
+With the local model, step 2 instead sends the page images to `src/local_engine/engine.py`, which HwTex starts once with `uv run` and keeps running so the model loads only once. It transcribes page by page and the pages are joined.
 
 ## License
 
