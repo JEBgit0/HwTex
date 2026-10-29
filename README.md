@@ -2,7 +2,7 @@
 
 Turn photos and scans of handwritten notes into LaTeX and a PDF.
 
-Drop a PDF or image of your notes on the window. [Claude Code](https://code.claude.com/docs/en/overview) reads the handwriting and writes the LaTeX, and your own LaTeX installation turns it into a PDF. The result is a new document, or it goes straight into a `.tex` file you are already writing.
+Drop a PDF or image of your notes on the window. [Claude Code](https://code.claude.com/docs/en/overview) or my new local model (see experimental) reads the handwriting and writes the LaTeX, and your own LaTeX installation turns it into a PDF. The result is a new document, or it goes straight into a `.tex` file you are already writing.
 
 Windows only.
 
@@ -39,6 +39,7 @@ Tools like Mathpix already turn handwriting into LaTeX, so why another one?
   irm https://claude.ai/install.ps1 | iex
   ```
   then run `claude` once and log in.
+- **Local Model**, if you don't have, or want to use, Claude (understandable)
 - **A TeX distribution** with `latexmk`. [TeX Live](https://tug.org/texlive/windows.html) (full install) is recommended. MiKTeX works too, but also needs [Perl](https://strawberryperl.com).
 
 The app has a **Setup** window that checks both and links to anything missing.
